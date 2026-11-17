@@ -1,0 +1,117 @@
+name: Release
+
+# Zwei Wege zum Release:
+#  1. Tag pushen:      git tag v0.2.0 && git push origin v0.2.0
+#  2. Auf GitHub:      Actions → Release → "Run workflow" → Version eingeben (z. B. v0.2.0)
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version / Tag, z. B. v0.2.0"
+        required: true
+      prerelease:
+        description: "Als Vorabversion markieren"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+          # Bewusst ältere Ubuntu-Version: Das Binary läuft dann auch auf
+          # Distributionen mit älterer glibc.
+          - os: ubuntu-22.04
+            platform: linux-x64
+    steps:
+      - name: Versionsformat prüfen
+        shell: bash
+        run: |
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "::error::Version muss wie v1.2.3 aussehen, war: '$VERSION'"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Qt-Systembibliotheken installieren (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+
+      - name: Abhängigkeiten installieren
+        run: python -m pip install -e ".[dev]"
+
+      - name: Mit PyInstaller bauen
+        run: >
+          pyinstaller --noconfirm --clean --windowed
+          --name PDF-Presenter --paths src src/pdf_presenter/__main__.py
+
+      - name: Paketieren (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item README.md dist/PDF-Presenter/
+          Compress-Archive -Path dist/PDF-Presenter -DestinationPath "PDF-Presenter-$env:VERSION-${{ matrix.platform }}.zip"
+
+      - name: Paketieren (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cp README.md dist/PDF-Presenter/
+          tar -czf "PDF-Presenter-$VERSION-${{ matrix.platform }}.tar.gz" -C dist PDF-Presenter
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PDF-Presenter-${{ matrix.platform }}
+          path: PDF-Presenter-*-${{ matrix.platform }}.*
+          if-no-files-found: error
+
+  release:
+    name: GitHub-Release erstellen
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: PDF Presenter ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: artifacts/*
+          body: |
+            ## Download
+            - **Windows:** `PDF-Presenter-${{ env.VERSION }}-windows-x64.zip` entpacken und `PDF-Presenter.exe` starten.
+            - **Linux:** `PDF-Presenter-${{ env.VERSION }}-linux-x64.tar.gz` entpacken und `PDF-Presenter/PDF-Presenter` starten
+              (unter Debian/Ubuntu ggf. vorher `sudo apt install libxcb-cursor0`).
