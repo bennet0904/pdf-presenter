@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf-presenter"
-version = "0.1.0"
+version = "0.2.0"
 description = "PDF-Präsentationen mit Presenteransicht auf zwei Bildschirmen"
 readme = "README.md"
 requires-python = ">=3.10"
