@@ -1,0 +1,16 @@
+# Für den Caddy aus compose.yaml (Profil "caddy"). Die Domain kommt aus
+# CRASH_DOMAIN in .env, das TLS-Zertifikat holt Caddy automatisch.
+{$CRASH_DOMAIN} {
+	request_body {
+		max_size 256KB
+	}
+	handle /api/v1/reports {
+		reverse_proxy crash-collector:8765
+	}
+	handle /healthz {
+		reverse_proxy crash-collector:8765
+	}
+	handle {
+		respond 404
+	}
+}

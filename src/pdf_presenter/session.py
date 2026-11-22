@@ -63,7 +63,7 @@ class PresentationSession(QObject):
 
         app = QGuiApplication.instance()
         app.screenAdded.connect(self._on_screens_changed)
-        app.screenRemoved.connect(self._on_screens_changed)
+        app.screenRemoved.connect(self._on_screen_removed)
         QApplication.instance().installEventFilter(self)
 
     # -------------------------------------------------------------- Ablauf
@@ -83,7 +83,7 @@ class PresentationSession(QObject):
         QApplication.instance().removeEventFilter(self)
         app = QGuiApplication.instance()
         app.screenAdded.disconnect(self._on_screens_changed)
-        app.screenRemoved.disconnect(self._on_screens_changed)
+        app.screenRemoved.disconnect(self._on_screen_removed)
         self.controller.pause_timer()
         for window in (self.audience, self.presenter):
             if window is not None:
@@ -127,6 +127,13 @@ class PresentationSession(QObject):
         swap = not self._settings.value("swap_screens", False, type=bool)
         self._settings.setValue("swap_screens", swap)
         self.place_windows()
+
+    def _on_screen_removed(self, screen: QScreen) -> None:
+        # Der gemerkte Bildschirm wird gleich von Qt gelöscht. Danach würde jeder
+        # Zugriff fehlschlagen und das Vollbild bliebe auf dem falschen Monitor.
+        if screen is self._audience_screen:
+            self._audience_screen = None
+        self._on_screens_changed(screen)
 
     def _on_screens_changed(self, _screen: QScreen) -> None:
         # Kurz warten, bis das Betriebssystem die neue Monitoranordnung gemeldet hat.

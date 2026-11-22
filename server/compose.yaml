@@ -1,0 +1,65 @@
+# Absturzberichte für PDF Presenter
+#
+#   cp .env.example .env              # Mail-Einstellungen eintragen
+#   printf '%s' 'PASSWORT' > smtp_password.txt && chmod 600 smtp_password.txt
+#   docker compose up -d --build
+#
+# Läuft auf dem VPS schon ein Reverse-Proxy (Caddy/nginx), leitet er die
+# Subdomain an 127.0.0.1:8765 weiter (siehe deploy/). Sonst CRASH_DOMAIN in
+# .env setzen und den mitgelieferten Caddy starten:
+#   docker compose --profile caddy up -d --build
+
+services:
+  crash-collector:
+    build: .
+    image: pdf-presenter-crash-collector
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8765:8765"   # nur lokal, für einen Reverse-Proxy auf dem Host
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Docker- und Loopback-Netze: von dort kommt der Reverse-Proxy. Nur dessen
+      # X-Forwarded-For wird für das Rate-Limit geglaubt.
+      CRASH_TRUSTED_PROXIES: "127.0.0.1,::1,172.16.0.0/12,192.168.0.0/16,10.0.0.0/8"
+      CRASH_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+    secrets:
+      - smtp_password
+    volumes:
+      - data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 64
+
+  caddy:
+    profiles: [caddy]
+    image: caddy:2
+    restart: unless-stopped
+    env_file:
+      - path: .env            # liefert CRASH_DOMAIN
+        required: false
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile.docker:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - crash-collector
+
+secrets:
+  smtp_password:
+    file: ./smtp_password.txt
+
+volumes:
+  data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,17 @@
+# Für einen Caddy direkt auf dem Host: in /etc/caddy/Caddyfile übernehmen
+# und crash.example.org durch die eigene Subdomain ersetzen. Caddy holt das
+# TLS-Zertifikat automatisch.
+crash.example.org {
+	request_body {
+		max_size 256KB
+	}
+	handle /api/v1/reports {
+		reverse_proxy 127.0.0.1:8765
+	}
+	handle /healthz {
+		reverse_proxy 127.0.0.1:8765
+	}
+	handle {
+		respond 404
+	}
+}

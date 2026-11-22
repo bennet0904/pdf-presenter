@@ -29,6 +29,11 @@ Eine Beispiel-PDF zum Ausprobieren: `python scripts/make_sample_pdf.py beispiel.
 
 Unter Linux braucht Qt ggf. Systempakete (z. B. `libxcb-cursor0` unter Debian/Ubuntu).
 
+Mit Python 3.10/3.11 (z. B. Systempython von Ubuntu 22.04) wird automatisch eine
+PySide6-Version vor 6.12 installiert. PySide6 6.12.0 beschädigt unter diesen
+Python-Versionen interne Referenzzähler, wodurch das Programm nach einiger Zeit
+abstürzt. Ab Python 3.12 besteht das Problem nicht.
+
 ## Tastenkürzel
 
 | Taste | Aktion |
@@ -47,6 +52,23 @@ Unter Linux braucht Qt ggf. Systempakete (z. B. `libxcb-cursor0` unter Debian/Ub
 | Esc | Präsentation beenden (im Notizfeld: Fokus verlassen) |
 
 Im Notizfeld tippt man ganz normal; nur Bild↑/Bild↓ (Clicker) schalten dort weiter.
+
+## Absturzberichte
+
+Unter *Hilfe → Absturzberichte automatisch senden* lässt sich einschalten, dass
+nach einem Absturz ein technischer Bericht an den Server des Projekts geht. Standardmäßig
+ist das aus. Eingeschaltet wird ohne weitere Nachfrage gesendet, wirksam ab dem
+nächsten Programmstart.
+
+Dann startet `pdf-presenter` die eigentliche App als Kindprozess und liest deren
+Fehlerausgabe mit (im Terminal erscheint sie weiterhin). So werden auch harte
+Abbrüche erfasst, bei denen in der App kein Python-Code mehr läuft. Gesendet werden
+Versionen, Betriebssystem, Grafiksystem, Bildschirmgrößen und das Ende der
+Fehlerausgabe. Dateinamen, Pfade und Notizen werden vorher entfernt. Berichte, die
+nicht ankommen, werden lokal aufgehoben und beim nächsten Start erneut gesendet.
+`--no-supervisor` startet ausnahmsweise ohne Überwachung.
+
+Der Server dazu liegt in [`server/`](server/README.md).
 
 ## Dateiformat `.pdfpres`
 
