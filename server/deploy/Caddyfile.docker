@@ -1,6 +1,6 @@
-# Für den Caddy aus compose.yaml (Profil "caddy"). Holt das
-# TLS-Zertifikat für crash.example.org automatisch.
-crash.example.org {
+# Für den Caddy aus compose.yaml (Profil "caddy"). Die Domain kommt aus
+# CRASH_DOMAIN in .env, das TLS-Zertifikat holt Caddy automatisch.
+{$CRASH_DOMAIN} {
 	request_body {
 		max_size 256KB
 	}

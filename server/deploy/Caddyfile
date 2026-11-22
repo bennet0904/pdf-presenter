@@ -1,5 +1,6 @@
-# Für einen Caddy direkt auf dem Host: in /etc/caddy/Caddyfile übernehmen.
-# Caddy holt das TLS-Zertifikat für die Subdomain automatisch.
+# Für einen Caddy direkt auf dem Host: in /etc/caddy/Caddyfile übernehmen
+# und crash.example.org durch die eigene Subdomain ersetzen. Caddy holt das
+# TLS-Zertifikat automatisch.
 crash.example.org {
 	request_body {
 		max_size 256KB

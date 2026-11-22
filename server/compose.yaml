@@ -4,9 +4,10 @@
 #   printf '%s' 'PASSWORT' > smtp_password.txt && chmod 600 smtp_password.txt
 #   docker compose up -d --build
 #
-# Läuft auf dem VPS schon ein Reverse-Proxy (Caddy/nginx), leitet er
-# crash.example.org an 127.0.0.1:8765 weiter (siehe deploy/). Sonst den
-# mitgelieferten Caddy starten:  docker compose --profile caddy up -d --build
+# Läuft auf dem VPS schon ein Reverse-Proxy (Caddy/nginx), leitet er die
+# Subdomain an 127.0.0.1:8765 weiter (siehe deploy/). Sonst CRASH_DOMAIN in
+# .env setzen und den mitgelieferten Caddy starten:
+#   docker compose --profile caddy up -d --build
 
 services:
   crash-collector:
@@ -40,6 +41,9 @@ services:
     profiles: [caddy]
     image: caddy:2
     restart: unless-stopped
+    env_file:
+      - path: .env            # liefert CRASH_DOMAIN
+        required: false
     ports:
       - "80:80"
       - "443:443"

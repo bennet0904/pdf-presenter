@@ -26,11 +26,12 @@ erreichbar ist. Sie muss mit `DEFAULT_ENDPOINT` in
    Docker Compose verlangt die Datei.
 4. **Starten:**
    - Läuft auf dem VPS schon ein Reverse-Proxy: `docker compose up -d --build`
-     und den Block aus `deploy/Caddyfile` bzw. `deploy/nginx.conf` übernehmen.
-     Der Container ist nur unter `127.0.0.1:8765` erreichbar.
-   - Gibt es noch keinen: `docker compose --profile caddy up -d --build`. Dann
-     startet zusätzlich ein Caddy, belegt die Ports 80 und 443 und holt das
-     TLS-Zertifikat selbst.
+     und den Block aus `deploy/Caddyfile` bzw. `deploy/nginx.conf` übernehmen,
+     dabei `crash.example.org` durch `<domain>` ersetzen. Der Container ist nur
+     unter `127.0.0.1:8765` erreichbar.
+   - Gibt es noch keinen: `CRASH_DOMAIN=<domain>` in `.env` eintragen und
+     `docker compose --profile caddy up -d --build`. Dann startet zusätzlich ein
+     Caddy, belegt die Ports 80 und 443 und holt das TLS-Zertifikat selbst.
 5. **Prüfen:**
    ```bash
    curl https://<domain>/healthz                             # {"ok": true}
