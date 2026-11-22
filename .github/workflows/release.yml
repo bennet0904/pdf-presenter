@@ -53,7 +53,8 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          # Mindestens 3.12, siehe Kommentar zu PySide6 in pyproject.toml
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: pyproject.toml
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QCloseEvent, QMouseEvent, QWheelEvent
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLayout, QVBoxLayout, QWidget
 
 from pdf_presenter.controller import PresentationController
 from pdf_presenter.document import SlideDocument
@@ -31,6 +31,9 @@ class AudienceWindow(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.view)
+        # Wie beim Presenter: Der Inhalt soll die Größe des Vollbildfensters
+        # nie verändern (unter Wayland wäre das ein fataler Protokollfehler).
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
 
         controller.page_changed.connect(self.view.set_page)
         controller.blank_changed.connect(self.view.set_blank)

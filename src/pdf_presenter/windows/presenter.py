@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QDateTime, QSettings, Qt, QTimer, Signal
-from PySide6.QtGui import QCloseEvent, QFont
+from PySide6.QtGui import QCloseEvent, QFont, QResizeEvent
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QPlainTextEdit,
     QPushButton,
     QSizePolicy,
@@ -41,6 +42,22 @@ QWidget#bar { background: #232328; border-top: 1px solid #33333b; }
 
 DEFAULT_NOTES_PT = 16
 
+# Untergrenze für die Fenstergröße. Bewusst klein: Die Presenteransicht darf
+# nie mehr Platz verlangen, als der Bildschirm hat (siehe PresenterWindow).
+MIN_WINDOW_SIZE = (640, 360)
+
+# Beschriftungen der unteren Leiste: (normal, kompakt für schmale Bildschirme)
+LABELS = {
+    "prev": ("◀  Zurück", "◀"),
+    "next": ("Weiter  ▶", "▶"),
+    "pause": ("⏸  Pause", "⏸"),
+    "start": ("▶  Start", "▶"),
+    "overview": ("▦ Übersicht", "▦"),
+    "black": ("■ Schwarz", "■"),
+    "swap": ("⇄ Tauschen", "⇄"),
+    "end": ("✕ Beenden", "✕"),
+}
+
 
 def _caption(text: str) -> QLabel:
     label = QLabel(text)
@@ -72,6 +89,7 @@ class PresenterWindow(QWidget):
         self._document = document
         self._ctrl = controller
         self._settings = QSettings()
+        self._compact = False
 
         # --- Folien -----------------------------------------------------
         self.current_view = SlideView(background="#111114")
@@ -141,8 +159,8 @@ class PresenterWindow(QWidget):
         bar_layout.setContentsMargins(12, 8, 12, 8)
         bar_layout.setSpacing(10)
 
-        self.prev_btn = _button("◀  Zurück", "Vorherige Folie (←, Bild↑)")
-        self.next_btn = _button("Weiter  ▶", "Nächste Folie (→, Bild↓, Leertaste)")
+        self.prev_btn = _button(LABELS["prev"][0], "Vorherige Folie (←, Bild↑)")
+        self.next_btn = _button(LABELS["next"][0], "Nächste Folie (→, Bild↓, Leertaste)")
         self.prev_btn.clicked.connect(controller.prev)
         self.next_btn.clicked.connect(controller.next)
         self.counter = QLabel()
@@ -151,7 +169,7 @@ class PresenterWindow(QWidget):
         self.timer_label = QLabel("00:00:00")
         self.timer_label.setObjectName("timer")
         self.timer_label.setToolTip("Laufzeit der Präsentation")
-        self.pause_btn = _button("⏸  Pause", "Timer anhalten/fortsetzen (T)")
+        self.pause_btn = _button(LABELS["pause"][0], "Timer anhalten/fortsetzen (T)")
         self.pause_btn.clicked.connect(controller.toggle_timer)
         reset_btn = _button("↺", "Timer zurücksetzen")
         reset_btn.clicked.connect(controller.reset_timer)
@@ -159,14 +177,14 @@ class PresenterWindow(QWidget):
         self.clock = QLabel()
         self.clock.setObjectName("clock")
         self.clock.setToolTip("Aktuelle Uhrzeit")
-        overview_btn = _button("▦ Übersicht", "Alle Folien anzeigen (G)")
+        overview_btn = _button(LABELS["overview"][0], "Alle Folien anzeigen (G)")
         overview_btn.clicked.connect(self.show_overview)
-        self.black_btn = _button("■ Schwarz", "Bildschirm schwarz an/aus (B) – bleibt beim Folienwechsel aktiv")
+        self.black_btn = _button(LABELS["black"][0], "Bildschirm schwarz an/aus (B) – bleibt beim Folienwechsel aktiv")
         self.black_btn.setCheckable(True)
         self.black_btn.clicked.connect(lambda: controller.toggle_black())
-        swap_btn = _button("⇄ Tauschen", "Bildschirme tauschen")
+        swap_btn = _button(LABELS["swap"][0], "Bildschirme tauschen")
         swap_btn.clicked.connect(self.swap_requested)
-        end_btn = _button("✕ Beenden", "Präsentation beenden (Esc)")
+        end_btn = _button(LABELS["end"][0], "Präsentation beenden (Esc)")
         end_btn.clicked.connect(self.end_requested)
 
         bar_layout.addWidget(self.prev_btn)
@@ -190,6 +208,18 @@ class PresenterWindow(QWidget):
         root.setSpacing(0)
         root.addWidget(main_split, 1)
         root.addWidget(bar)
+        # Das Layout darf die Fenstergröße nicht bestimmen. Sonst vergrößert Qt
+        # das maximierte Fenster, sobald die Leiste breiter wird als der
+        # Bildschirm (z. B. bei „Folie 10 / 12“). Unter Wayland ist das ein
+        # Protokollfehler, und der Compositor beendet daraufhin das Programm.
+        root.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+        self.setMinimumSize(*MIN_WINDOW_SIZE)
+
+        # Buttons, deren Beschriftung im Kompaktmodus gekürzt wird
+        self._labelled = {
+            "prev": self.prev_btn, "next": self.next_btn, "overview": overview_btn,
+            "black": self.black_btn, "swap": swap_btn, "end": end_btn,
+        }
 
         # --- Signale ------------------------------------------------------
         controller.page_changed.connect(self._on_page_changed)
@@ -206,6 +236,8 @@ class PresenterWindow(QWidget):
         self._jump = ""
         self._on_page_changed(controller.current_page)
         self._on_timer_running(controller.timer_running)
+        self._fix_label_widths()
+        self._full_width = self.layout().minimumSize().width()
 
     # ------------------------------------------------------------ Anzeige
     def _on_page_changed(self, page: int) -> None:
@@ -227,10 +259,52 @@ class PresenterWindow(QWidget):
         self._refresh_status()
 
     def _on_timer_running(self, running: bool) -> None:
-        self.pause_btn.setText("⏸  Pause" if running else "▶  Start")
+        self.pause_btn.setText(LABELS["pause" if running else "start"][self._compact])
         self.timer_label.setProperty("paused", "false" if running else "true")
         self.timer_label.style().unpolish(self.timer_label)
         self.timer_label.style().polish(self.timer_label)
+
+    # ------------------------------------------------------ Platzbedarf
+    def _fix_label_widths(self) -> None:
+        """Feste Breiten für Texte, die sich während des Vortrags ändern.
+
+        So springt die Leiste nicht hin und her, wenn aus „Folie 9“ „Folie 10“
+        wird oder der Timer zwischen Pause und Start wechselt.
+        """
+        self.ensurePolished()
+        count = self._ctrl.page_count
+        widest = f"Folie {count} / {count}"
+        self.counter.setMinimumWidth(self.counter.fontMetrics().horizontalAdvance(widest) + 4)
+        self.timer_label.setMinimumWidth(
+            self.timer_label.fontMetrics().horizontalAdvance("00:00:00") + 4
+        )
+        self._update_pause_width()
+
+    def _update_pause_width(self) -> None:
+        current = self.pause_btn.text()
+        width = 0
+        for key in ("pause", "start"):
+            self.pause_btn.setText(LABELS[key][self._compact])
+            width = max(width, self.pause_btn.sizeHint().width())
+        self.pause_btn.setText(current)
+        self.pause_btn.setMinimumWidth(width)
+
+    def set_compact(self, compact: bool) -> None:
+        """Kurze Button-Beschriftungen (nur Symbole) für schmale Bildschirme."""
+        if compact == self._compact:
+            return
+        self._compact = compact
+        for key, button in self._labelled.items():
+            button.setText(LABELS[key][compact])
+        self._on_timer_running(self._ctrl.timer_running)
+        self._update_pause_width()
+
+    def is_compact(self) -> bool:
+        return self._compact
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        self.set_compact(event.size().width() < self._full_width)
+        super().resizeEvent(event)
 
     def _update_clock(self) -> None:
         self.clock.setText(QDateTime.currentDateTime().toString("HH:mm"))

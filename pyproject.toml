@@ -8,7 +8,14 @@ version = "0.1.0"
 description = "PDF-Präsentationen mit Presenteransicht auf zwei Bildschirmen"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["PySide6>=6.6"]
+dependencies = [
+    # PySide6 6.12.0 zählt unter Python < 3.12 die Referenzen auf None/True/False
+    # falsch. Nach einigen hundert Aktionen bricht der Interpreter dann mit
+    # „Fatal Python error: deallocating None“ ab. Ab Python 3.12 sind diese
+    # Objekte unsterblich und der Fehler bleibt folgenlos.
+    "PySide6>=6.6,<6.12; python_version < '3.12'",
+    "PySide6>=6.6; python_version >= '3.12'",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pyinstaller>=6"]

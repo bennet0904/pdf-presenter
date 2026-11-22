@@ -29,6 +29,11 @@ Eine Beispiel-PDF zum Ausprobieren: `python scripts/make_sample_pdf.py beispiel.
 
 Unter Linux braucht Qt ggf. Systempakete (z. B. `libxcb-cursor0` unter Debian/Ubuntu).
 
+Mit Python 3.10/3.11 (z. B. Systempython von Ubuntu 22.04) wird automatisch eine
+PySide6-Version vor 6.12 installiert. PySide6 6.12.0 beschädigt unter diesen
+Python-Versionen interne Referenzzähler, wodurch das Programm nach einiger Zeit
+abstürzt. Ab Python 3.12 besteht das Problem nicht.
+
 ## Tastenkürzel
 
 | Taste | Aktion |

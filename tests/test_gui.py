@@ -108,3 +108,39 @@ def test_audience_only_mode(window, sample_pdf):
     assert session.controller.current_page == 1
     press(session.audience, Qt.Key.Key_Escape)
     assert window.session is None
+
+
+def test_presenter_fits_narrow_screens(window, sample_pdf):
+    """Die Leiste darf das Fenster nie breiter machen als den Bildschirm.
+
+    Unter Wayland beendet der Compositor sonst das Programm (Protokollfehler).
+    """
+    window.open_path(sample_pdf)
+    window.start_presentation(from_current=False)
+    presenter = window.session.presenter
+    presenter.showNormal()
+
+    presenter.resize(900, 500)
+    assert presenter.width() == 900
+    assert presenter.is_compact()
+    assert presenter.next_btn.text() == "▶"
+    press(presenter, Qt.Key.Key_T)  # Pause-Text wechselt, Breite bleibt
+    assert presenter.width() == 900
+
+    presenter.resize(1900, 1000)
+    assert not presenter.is_compact()
+    assert "Weiter" in presenter.next_btn.text()
+    press(presenter, Qt.Key.Key_Escape)
+
+
+def test_removed_audience_screen_is_forgotten(window, sample_pdf):
+    window.open_path(sample_pdf)
+    window.start_presentation(from_current=False, audience_only=True)
+    session = window.session
+    removed = session._audience_screen
+    assert removed is not None
+    session._on_screen_removed(removed)
+    assert session._audience_screen is None
+    session.place_windows()  # fällt auf den Hauptbildschirm zurück
+    assert session.audience.isFullScreen()
+    press(session.audience, Qt.Key.Key_Escape)

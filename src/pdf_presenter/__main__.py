@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
+from pdf_presenter.compat import unsafe_runtime_warning
 from pdf_presenter.windows.main_window import APP_NAME, MainWindow
 
 
@@ -18,6 +19,10 @@ def main(argv: list[str] | None = None) -> int:
 
     window = MainWindow()
     window.show()
+    warning = unsafe_runtime_warning()
+    if warning:
+        print(warning, file=sys.stderr)
+        QMessageBox.warning(window, APP_NAME, warning)
     files = [a for a in app.arguments()[1:] if not a.startswith("-")]
     if files:
         window.open_path(files[0])
