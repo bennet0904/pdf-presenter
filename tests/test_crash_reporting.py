@@ -24,7 +24,7 @@ def isolated(qapp, tmp_path, monkeypatch):
     monkeypatch.setattr(crashreport, "data_dir", lambda: _mk(tmp_path / "data"))
 
     store = cc.Store(str(tmp_path / "server.sqlite3"))
-    srv = cc.make_server("127.0.0.1:0", store, cc.RateLimiter(100, 1000), trust_proxy=False)
+    srv = cc.make_server("127.0.0.1:0", store, cc.RateLimiter(100, 1000))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     monkeypatch.setenv(crashreport.ENV_ENDPOINT, f"http://127.0.0.1:{srv.server_address[1]}{cc.API_PATH}")
     yield store
@@ -130,3 +130,49 @@ def test_pending_reports_are_sent_on_next_start(isolated):
     assert got["report_id"] == report["report_id"] and got["kind"] == "signal"
     if sys.platform != "win32":
         assert got["signal"] == "SIGSEGV"
+
+
+def test_run_marker_detects_crashed_instance(isolated, tmp_path):
+    import subprocess
+
+    code = (
+        "import os, sys\n"
+        "from PySide6.QtCore import QLockFile\n"
+        "l = QLockFile(sys.argv[1]); l.setStaleLockTime(0); l.tryLock(0)\n"
+        "os._exit(1)  # wie ein Absturz: Sperrdatei bleibt liegen\n"
+    )
+    running = crashreport.data_dir() / "running"
+    running.mkdir(parents=True, exist_ok=True)
+    subprocess.run([sys.executable, "-c", code, str(running / "dead.lock")], check=False)
+
+    marker = crashreport.RunMarker()
+    assert marker.previous_crashes() == 1
+    assert marker.previous_crashes() == 0  # nur einmal melden
+    second = crashreport.RunMarker()       # läuft noch -> kein Absturz
+    assert marker.previous_crashes() == 0
+    second.release()
+    marker.release()
+    assert list(running.glob("*.lock")) == []
+
+
+def test_offer_after_crash_only_once(isolated, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from pdf_presenter.windows.main_window import MainWindow
+
+    clicked = []
+
+    def fake_exec(box):
+        button = next(b for b in box.buttons() if box.buttonRole(b) == QMessageBox.ButtonRole.AcceptRole)
+        clicked.append(button)
+        monkeypatch.setattr(box, "clickedButton", lambda: button)
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+    win = MainWindow()
+    assert win.offer_crash_reports() is True
+    assert crashreport.is_enabled() and win.act_crash_reports.isChecked()
+    crashreport.set_enabled(False)
+    assert win.offer_crash_reports() is False  # nicht ein zweites Mal fragen
+    assert len(clicked) == 1
+    win.close()

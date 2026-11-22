@@ -1,0 +1,16 @@
+# Für den Caddy aus compose.yaml (Profil "caddy"). Holt das
+# TLS-Zertifikat für crash.example.org automatisch.
+crash.example.org {
+	request_body {
+		max_size 256KB
+	}
+	handle /api/v1/reports {
+		reverse_proxy crash-collector:8765
+	}
+	handle /healthz {
+		reverse_proxy crash-collector:8765
+	}
+	handle {
+		respond 404
+	}
+}

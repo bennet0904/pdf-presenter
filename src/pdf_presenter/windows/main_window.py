@@ -354,6 +354,15 @@ class MainWindow(QMainWindow):
         else:
             self.setWindowTitle(APP_NAME)
 
+    CRASH_REPORT_CONTENTS = (
+        "<p><b>Enthalten:</b> Programm-, Python- und Qt-Version, Betriebssystem, "
+        "Grafiksystem (Wayland/X11), Bildschirmgrößen, ob gerade präsentiert wurde, "
+        "die letzten Fehlermeldungen des Programms und eine zufällige "
+        "Installations-ID.</p>"
+        "<p><b>Nicht enthalten:</b> Dateinamen, Pfade, Folieninhalte oder Notizen.</p>"
+        "<p>Ausschalten jederzeit unter <i>Hilfe → Absturzberichte automatisch senden</i>.</p>"
+    )
+
     def _toggle_crash_reports(self, enabled: bool) -> None:
         crashreport.set_enabled(enabled)
         if not enabled:
@@ -363,14 +372,36 @@ class MainWindow(QMainWindow):
             self, "Absturzberichte",
             "<p>Ab dem nächsten Programmstart wird nach einem Absturz automatisch ein "
             "Bericht an den Server des Projekts gesendet, ohne weitere Nachfrage.</p>"
-            "<p><b>Enthalten:</b> Programm-, Python- und Qt-Version, Betriebssystem, "
-            "Grafiksystem (Wayland/X11), Bildschirmgrößen, ob gerade präsentiert wurde, "
-            "die letzten Fehlermeldungen des Programms und eine zufällige "
-            "Installations-ID.</p>"
-            "<p><b>Nicht enthalten:</b> Dateinamen, Pfade im Home-Verzeichnis, "
-            "Folieninhalte oder Notizen.</p>"
-            "<p>Ausschalten jederzeit unter <i>Hilfe → Absturzberichte automatisch senden</i>.</p>",
+            + self.CRASH_REPORT_CONTENTS,
         )
+
+    def offer_crash_reports(self) -> bool:
+        """Einmaliges Angebot nach einem erkannten Absturz. True = eingeschaltet."""
+        if crashreport.was_offered() or crashreport.is_enabled():
+            return False
+        crashreport.set_offered()
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(APP_NAME)
+        box.setText(
+            "<p><b>PDF Presenter wurde beim letzten Mal unerwartet beendet.</b></p>"
+            "<p>Möchten Sie künftig nach einem Absturz automatisch einen Bericht an die "
+            "Entwickler senden? Das hilft, solche Fehler zu finden und zu beheben. "
+            "Gesendet wird ohne weitere Nachfrage, ab dem nächsten Programmstart.</p>"
+            + self.CRASH_REPORT_CONTENTS
+        )
+        enable = box.addButton("Berichte senden", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Nein, danke", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(enable)
+        box.exec()
+        if box.clickedButton() is not enable:
+            return False
+        crashreport.set_enabled(True)
+        self.act_crash_reports.blockSignals(True)  # kein zweiter Hinweisdialog
+        self.act_crash_reports.setChecked(True)
+        self.act_crash_reports.blockSignals(False)
+        self.statusBar().showMessage("Absturzberichte eingeschaltet (ab dem nächsten Start)", 6000)
+        return True
 
     def _show_shortcuts(self) -> None:
         QMessageBox.information(

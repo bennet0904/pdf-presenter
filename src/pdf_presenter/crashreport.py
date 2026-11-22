@@ -29,7 +29,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QStandardPaths
+from PySide6.QtCore import QLockFile, QSettings, QStandardPaths
 
 from pdf_presenter import __version__
 
@@ -38,6 +38,7 @@ SCHEMA = 1
 
 KEY_ENABLED = "crash_reports/enabled"
 KEY_INSTALL_ID = "crash_reports/install_id"
+KEY_OFFERED = "crash_reports/offered"   # Angebot nach einem Absturz schon gezeigt?
 
 # Umgebungsvariablen zwischen Supervisor und Kindprozess
 ENV_CHILD = "PDF_PRESENTER_SUPERVISED"
@@ -70,6 +71,14 @@ def install_id() -> str:
         value = str(uuid.uuid4())
         settings.setValue(KEY_INSTALL_ID, value)
     return value
+
+
+def was_offered() -> bool:
+    return QSettings().value(KEY_OFFERED, False, type=bool)
+
+
+def set_offered() -> None:
+    QSettings().setValue(KEY_OFFERED, True)
 
 
 def endpoint() -> str:
@@ -223,6 +232,41 @@ def note_presenting(presenting: bool) -> None:
     """Merkt sich, ob gerade präsentiert wird (für den Bericht)."""
     if _session is not None:
         _session.set_presenting(presenting)
+
+
+# ------------------------------------- Abstürze ohne Supervisor erkennen
+class RunMarker:
+    """Sperrdatei, solange diese Instanz läuft.
+
+    Ohne Supervisor sieht die App einen Absturz nicht direkt. Sie merkt ihn aber
+    beim nächsten Start: Dann liegt noch eine Sperrdatei, deren Prozess nicht
+    mehr läuft. ``QLockFile`` prüft das plattformübergreifend.
+    """
+
+    def __init__(self) -> None:
+        self._dir = data_dir() / "running"
+        self._dir.mkdir(parents=True, exist_ok=True)
+        self.path = self._dir / f"{uuid.uuid4()}.lock"
+        self._lock = QLockFile(str(self.path))
+        self._lock.setStaleLockTime(0)  # nur „Prozess tot“ zählt, nicht das Alter
+        self._lock.tryLock(0)
+
+    def previous_crashes(self) -> int:
+        """Anzahl früherer Instanzen, die ohne sauberes Beenden endeten."""
+        found = 0
+        for path in self._dir.glob("*.lock"):
+            if path == self.path:
+                continue
+            other = QLockFile(str(path))
+            other.setStaleLockTime(0)
+            if other.tryLock(0):  # gelingt nur, wenn der Besitzer nicht mehr lebt
+                other.unlock()    # entfernt die Datei
+                found += 1
+        return found
+
+    def release(self) -> None:
+        """Bei sauberem Programmende aufrufen."""
+        self._lock.unlock()
 
 
 # --------------------------------------------------------- Bericht bauen

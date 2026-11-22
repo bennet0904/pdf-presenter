@@ -1,45 +1,77 @@
 # Absturzberichte: Server
 
 `crash_collector.py` nimmt die Berichte von PDF Presenter an
-(`POST https://<domain>/api/v1/reports`) und speichert sie in einer
-SQLite-Datenbank. Es braucht nur Python 3.10 oder neuer, keine weiteren Pakete.
-TLS übernimmt ein Reverse-Proxy (Caddy oder nginx).
+(`POST https://<domain>/api/v1/reports`), speichert sie in SQLite und
+schickt auf Wunsch eine aufbereitete E-Mail. Es läuft als Docker-Container und
+braucht nur die Python-Standardbibliothek. TLS übernimmt ein Reverse-Proxy.
 
 ## Einrichten auf dem VPS
 
 1. **DNS:** A-Record für `<domain>` auf die IPv4 des VPS, bei IPv6 zusätzlich
    einen AAAA-Record.
-2. **Programm kopieren:**
+2. **Dateien kopieren:** den Ordner `server/` auf den VPS, z. B. nach
+   `/opt/crash-collector`.
+3. **Mail einrichten** (optional, ohne Mail werden Berichte nur gespeichert):
    ```bash
-   sudo mkdir -p /opt/crash-collector
-   sudo cp crash_collector.py /opt/crash-collector/
+   cd /opt/crash-collector
+   cp .env.example .env            # Empfänger, SMTP-Server, Benutzer eintragen
+   printf '%s' 'SMTP-PASSWORT' > smtp_password.txt
+   chmod 600 smtp_password.txt
    ```
-3. **Dienst einrichten:**
+   Ohne Mail trotzdem eine leere `smtp_password.txt` anlegen (`touch smtp_password.txt`),
+   Docker Compose verlangt die Datei.
+4. **Starten:**
+   - Läuft auf dem VPS schon ein Reverse-Proxy: `docker compose up -d --build`
+     und den Block aus `deploy/Caddyfile` bzw. `deploy/nginx.conf` übernehmen.
+     Der Container ist nur unter `127.0.0.1:8765` erreichbar.
+   - Gibt es noch keinen: `docker compose --profile caddy up -d --build`. Dann
+     startet zusätzlich ein Caddy, belegt die Ports 80 und 443 und holt das
+     TLS-Zertifikat selbst.
+5. **Prüfen:**
    ```bash
-   sudo cp deploy/crash-collector.service /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now crash-collector
-   systemctl status crash-collector
+   curl https://<domain>/healthz                       # {"ok": true}
+   docker compose exec crash-collector crash_collector.py testmail
    ```
-4. **Reverse-Proxy:** Den Block aus `deploy/Caddyfile` in `/etc/caddy/Caddyfile`
-   übernehmen und `sudo systemctl reload caddy`. Mit nginx stattdessen
-   `deploy/nginx.conf` verwenden.
-5. **Prüfen:** `curl https://<domain>/healthz` sollte `{"ok": true}` liefern.
+   `testmail` schickt eine Beispielmail (oder den neuesten Bericht) an die
+   eingetragenen Empfänger.
+
+## E-Mails
+
+- Eine **neue Absturzursache** wird sofort gemeldet (Betreff „Neuer Absturz: …“).
+- Eine **bekannte Ursache** höchstens alle `CRASH_MAIL_REPEAT_HOURS` Stunden
+  (Standard 24), mit der Zahl der Berichte seit der letzten Mail. Mit `0` kommt
+  zu jedem Bericht eine Mail.
+- Inhalt: Programmversion, Art des Absturzes, Laufzeit, ob gerade präsentiert
+  wurde, Python/PySide/Qt, System, Grafiksystem, Bildschirme, Verlauf der Ursache
+  (Anzahl, betroffene Installationen, erstmals gesehen) und die letzten 80 Zeilen
+  der Fehlerausgabe. Bei bekannten Ursachen steht oben ein Hinweis.
+- Scheitert der Versand, steht das im Log (`docker compose logs crash-collector`).
+  Der nächste Bericht dieser Ursache löst dann erneut eine Mail aus.
+
+Typische Einstellungen in `.env`:
+
+| Anbieter | `CRASH_SMTP_HOST` | Port | `CRASH_SMTP_SECURITY` |
+|---|---|---|---|
+| Eigener Mailserver / die meisten Hoster | smtp.… | 587 | starttls |
+| Hoster mit SSL ab Verbindungsbeginn | smtp.… | 465 | ssl |
 
 ## Berichte ansehen
 
-Die Datenbank gehört dem Dienstbenutzer, deshalb mit `sudo`:
-
 ```bash
-DB=/var/lib/crash-collector/reports.sqlite3
-sudo python3 /opt/crash-collector/crash_collector.py --db $DB groups     # nach Ursache gruppiert
-sudo python3 /opt/crash-collector/crash_collector.py --db $DB list       # die neuesten
-sudo python3 /opt/crash-collector/crash_collector.py --db $DB show 42    # ein Bericht komplett
+docker compose exec crash-collector crash_collector.py groups     # nach Ursache gruppiert
+docker compose exec crash-collector crash_collector.py list       # die neuesten
+docker compose exec crash-collector crash_collector.py show 42    # ein Bericht komplett
 ```
 
-`groups` fasst gleiche Abstürze über eine Signatur zusammen (Art des Absturzes,
-erste Zeile eines `Fatal Python error`, oberste Funktionen im Traceback) und
-zeigt, wie viele Installationen betroffen sind.
+Die Datenbank liegt im Docker-Volume `data` (`/data/reports.sqlite3` im Container).
+Sicherung zum Beispiel mit
+`docker compose cp crash-collector:/data/reports.sqlite3 ./backup.sqlite3`.
+
+## Aktualisieren
+
+```bash
+docker compose up -d --build
+```
 
 ## Schutz und Datenschutz
 
@@ -48,9 +80,12 @@ zeigt, wie viele Installationen betroffen sind.
   (`CRASH_PER_IP_HOUR`, `CRASH_PER_DAY`).
 - IP-Adressen werden weder gespeichert noch geloggt. Sie liegen nur für das
   Rate-Limit kurz im Arbeitsspeicher.
-- Die App entfernt vor dem Senden Home-Verzeichnis, Benutzernamen und Namen
-  von PDF-Dateien aus dem Bericht.
-- Nach dem Abschalten der Funktion in der App wird nichts mehr gesendet.
+- Der Container läuft als unprivilegierter Benutzer, mit schreibgeschütztem
+  Dateisystem (außer dem Daten-Volume), ohne Linux-Capabilities und mit
+  Speichergrenze. Das SMTP-Passwort kommt als Docker-Secret, nicht als
+  Umgebungsvariable.
+- Die App entfernt vor dem Senden Home-Verzeichnis, Benutzernamen, Pfade und
+  Namen von PDF-Dateien.
 
 ## Format eines Berichts (Schema 1)
 

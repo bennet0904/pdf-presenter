@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from pdf_presenter import crashreport, supervisor
@@ -24,8 +24,11 @@ def main(argv: list[str] | None = None) -> int:
 
     app = QApplication(argv)
     app.setApplicationDisplayName(APP_NAME)
+    marker = None
     if crashreport.is_child():
         crashreport.init_child(app)
+    else:
+        marker = crashreport.RunMarker()
 
     window = MainWindow()
     window.show()
@@ -36,7 +39,12 @@ def main(argv: list[str] | None = None) -> int:
     files = [a for a in app.arguments()[1:] if not a.startswith("-")]
     if files:
         window.open_path(files[0])
-    return app.exec()
+    if marker is not None and marker.previous_crashes() and not crashreport.is_enabled():
+        QTimer.singleShot(0, window.offer_crash_reports)
+    exit_code = app.exec()
+    if marker is not None:
+        marker.release()
+    return exit_code
 
 
 if __name__ == "__main__":
