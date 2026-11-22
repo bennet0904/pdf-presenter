@@ -119,16 +119,20 @@ def test_presenter_fits_narrow_screens(window, sample_pdf):
     window.start_presentation(from_current=False)
     presenter = window.session.presenter
     presenter.showNormal()
+    full = presenter.full_width()
+    # Die volle Leiste darf nicht absurd breit sein (Schriften/DPI je nach System).
+    assert 600 < full < 2400, full
 
-    presenter.resize(900, 500)
-    assert presenter.width() == 900
-    assert presenter.is_compact()
+    narrow = full - 100
+    presenter.resize(narrow, 500)
+    assert presenter.width() == narrow
+    assert presenter.is_compact(), (presenter.width(), full)
     assert presenter.next_btn.text() == "▶"
     press(presenter, Qt.Key.Key_T)  # Pause-Text wechselt, Breite bleibt
-    assert presenter.width() == 900
+    assert presenter.width() == narrow
 
-    presenter.resize(1900, 1000)
-    assert not presenter.is_compact()
+    presenter.resize(full + 50, 1000)
+    assert not presenter.is_compact(), (presenter.width(), full, presenter.full_width())
     assert "Weiter" in presenter.next_btn.text()
     press(presenter, Qt.Key.Key_Escape)
 

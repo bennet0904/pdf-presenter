@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QDateTime, QSettings, Qt, QTimer, Signal
-from PySide6.QtGui import QCloseEvent, QFont, QResizeEvent
+from PySide6.QtGui import QCloseEvent, QFont, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -236,8 +236,8 @@ class PresenterWindow(QWidget):
         self._jump = ""
         self._on_page_changed(controller.current_page)
         self._on_timer_running(controller.timer_running)
-        self._fix_label_widths()
-        self._full_width = self.layout().minimumSize().width()
+        self._screen_hooked = False
+        self._measure_full_width()
 
     # ------------------------------------------------------------ Anzeige
     def _on_page_changed(self, page: int) -> None:
@@ -301,6 +301,34 @@ class PresenterWindow(QWidget):
 
     def is_compact(self) -> bool:
         return self._compact
+
+    def full_width(self) -> int:
+        """Breite, ab der die Leiste mit vollen Beschriftungen Platz hat."""
+        return self._full_width
+
+    def _measure_full_width(self) -> None:
+        """Misst den Platzbedarf der Leiste mit vollen Beschriftungen.
+
+        Schriftgröße in Pixeln hängt von der DPI des Bildschirms ab. Deshalb wird
+        beim Anzeigen und bei jedem Bildschirmwechsel neu gemessen, nicht nur
+        einmal beim Erzeugen des Fensters.
+        """
+        compact = self._compact
+        self.set_compact(False)
+        self._fix_label_widths()
+        self.layout().invalidate()
+        self._full_width = self.layout().minimumSize().width()
+        self.set_compact(compact)
+        self._fix_label_widths()
+        self.set_compact(self.width() < self._full_width)
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802
+        super().showEvent(event)
+        handle = self.windowHandle()
+        if handle is not None and not self._screen_hooked:
+            handle.screenChanged.connect(lambda _s: self._measure_full_width())
+            self._screen_hooked = True
+        self._measure_full_width()
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
         self.set_compact(event.size().width() < self._full_width)
