@@ -5,6 +5,10 @@
 schickt auf Wunsch eine aufbereitete E-Mail. Es läuft als Docker-Container und
 braucht nur die Python-Standardbibliothek. TLS übernimmt ein Reverse-Proxy.
 
+`<domain>` steht in dieser Anleitung für die Subdomain, unter der der Server
+erreichbar ist. Sie muss mit `DEFAULT_ENDPOINT` in
+`src/pdf_presenter/crashreport.py` und den Dateien in `deploy/` übereinstimmen.
+
 ## Einrichten auf dem VPS
 
 1. **DNS:** A-Record für `<domain>` auf die IPv4 des VPS, bei IPv6 zusätzlich
@@ -29,7 +33,7 @@ braucht nur die Python-Standardbibliothek. TLS übernimmt ein Reverse-Proxy.
      TLS-Zertifikat selbst.
 5. **Prüfen:**
    ```bash
-   curl https://<domain>/healthz                       # {"ok": true}
+   curl https://<domain>/healthz                             # {"ok": true}
    docker compose exec crash-collector crash_collector.py testmail
    ```
    `testmail` schickt eine Beispielmail (oder den neuesten Bericht) an die
