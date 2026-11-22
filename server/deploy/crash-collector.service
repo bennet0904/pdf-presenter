@@ -1,0 +1,32 @@
+[Unit]
+Description=PDF Presenter – Absturzberichte annehmen
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/crash-collector/crash_collector.py serve
+Environment=CRASH_BIND=127.0.0.1:8765
+Environment=CRASH_DB=/var/lib/crash-collector/reports.sqlite3
+Environment=CRASH_TRUST_PROXY=1
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+
+# Eigener, unprivilegierter Benutzer und möglichst wenig Rechte
+DynamicUser=yes
+StateDirectory=crash-collector
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

@@ -53,6 +53,23 @@ abstürzt. Ab Python 3.12 besteht das Problem nicht.
 
 Im Notizfeld tippt man ganz normal; nur Bild↑/Bild↓ (Clicker) schalten dort weiter.
 
+## Absturzberichte
+
+Unter *Hilfe → Absturzberichte automatisch senden* lässt sich einschalten, dass
+nach einem Absturz ein technischer Bericht an den Server des Projekts geht. Standardmäßig
+ist das aus. Eingeschaltet wird ohne weitere Nachfrage gesendet, wirksam ab dem
+nächsten Programmstart.
+
+Dann startet `pdf-presenter` die eigentliche App als Kindprozess und liest deren
+Fehlerausgabe mit (im Terminal erscheint sie weiterhin). So werden auch harte
+Abbrüche erfasst, bei denen in der App kein Python-Code mehr läuft. Gesendet werden
+Versionen, Betriebssystem, Grafiksystem, Bildschirmgrößen und das Ende der
+Fehlerausgabe. Dateinamen, Pfade und Notizen werden vorher entfernt. Berichte, die
+nicht ankommen, werden lokal aufgehoben und beim nächsten Start erneut gesendet.
+`--no-supervisor` startet ausnahmsweise ohne Überwachung.
+
+Der Server dazu liegt in [`server/`](server/README.md).
+
 ## Dateiformat `.pdfpres`
 
 ZIP-Archiv mit `presentation.pdf` (Original, unverändert) und `notes.json`:

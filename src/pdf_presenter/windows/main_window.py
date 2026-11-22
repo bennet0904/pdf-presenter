@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pdf_presenter import crashreport
 from pdf_presenter.document import SlideDocument
 from pdf_presenter.project import PROJECT_SUFFIX, Project, ProjectError
 from pdf_presenter.session import PresentationSession
@@ -143,6 +144,14 @@ class MainWindow(QMainWindow):
 
         help_menu = self.menuBar().addMenu("&Hilfe")
         help_menu.addAction(self._action("&Tastenkürzel", self._show_shortcuts, "F1"))
+        help_menu.addSeparator()
+        self.act_crash_reports = QAction("&Absturzberichte automatisch senden", self, checkable=True)
+        self.act_crash_reports.setStatusTip(
+            "Nach einem Absturz einen anonymen technischen Bericht an die Entwickler schicken"
+        )
+        self.act_crash_reports.setChecked(crashreport.is_enabled())
+        self.act_crash_reports.toggled.connect(self._toggle_crash_reports)
+        help_menu.addAction(self.act_crash_reports)
 
         toolbar = self.addToolBar("Werkzeuge")
         toolbar.setMovable(False)
@@ -270,8 +279,10 @@ class MainWindow(QMainWindow):
         self.session.notes_edited.connect(self._update_ui)
         self.hide()
         self.session.start()
+        crashreport.note_presenting(True)
 
     def _on_presentation_finished(self, last_page: int) -> None:
+        crashreport.note_presenting(False)
         session, self.session = self.session, None
         if session is not None:
             session.deleteLater()
@@ -342,6 +353,24 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(f"{self.project.display_name}{star} – {APP_NAME}")
         else:
             self.setWindowTitle(APP_NAME)
+
+    def _toggle_crash_reports(self, enabled: bool) -> None:
+        crashreport.set_enabled(enabled)
+        if not enabled:
+            self.statusBar().showMessage("Absturzberichte ausgeschaltet (ab dem nächsten Start)", 6000)
+            return
+        QMessageBox.information(
+            self, "Absturzberichte",
+            "<p>Ab dem nächsten Programmstart wird nach einem Absturz automatisch ein "
+            "Bericht an den Server des Projekts gesendet, ohne weitere Nachfrage.</p>"
+            "<p><b>Enthalten:</b> Programm-, Python- und Qt-Version, Betriebssystem, "
+            "Grafiksystem (Wayland/X11), Bildschirmgrößen, ob gerade präsentiert wurde, "
+            "die letzten Fehlermeldungen des Programms und eine zufällige "
+            "Installations-ID.</p>"
+            "<p><b>Nicht enthalten:</b> Dateinamen, Pfade im Home-Verzeichnis, "
+            "Folieninhalte oder Notizen.</p>"
+            "<p>Ausschalten jederzeit unter <i>Hilfe → Absturzberichte automatisch senden</i>.</p>",
+        )
 
     def _show_shortcuts(self) -> None:
         QMessageBox.information(
